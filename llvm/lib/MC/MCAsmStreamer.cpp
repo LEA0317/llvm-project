@@ -1898,7 +1898,7 @@ void MCAsmStreamer::AddEncodingComment(const MCInst &Inst,
 
     // See if all bits are the same map entry.
     uint8_t MapEntry = FixupMap[i * 8 + 0];
-    for (unsigned j = 1; j != 8; ++j) {
+    for (unsigned j = 1; j != 4; ++j) {
       if (FixupMap[i * 8 + j] == MapEntry)
         continue;
 
@@ -1918,22 +1918,44 @@ void MCAsmStreamer::AddEncodingComment(const MCInst &Inst,
           OS << char('A' + MapEntry - 1);
       }
     } else {
-      // Otherwise, write out in binary.
-      OS << "0b";
-      for (unsigned j = 8; j--;) {
-        unsigned Bit = (Code[i] >> j) & 1;
+      uint8_t MapEntry = FixupMap[i * 8 + 4];
+      for (unsigned j = 5; j != 8; ++j) {
+	if (FixupMap[i * 8 + j] == MapEntry)
+	  continue;
 
-        unsigned FixupBit;
-        if (MAI->isLittleEndian())
-          FixupBit = i * 8 + j;
-        else
-          FixupBit = i * 8 + (7-j);
+	MapEntry = uint8_t(~0U);
+	break;
+      }
 
-        if (uint8_t MapEntry = FixupMap[FixupBit]) {
-          assert(Bit == 0 && "Encoder wrote into fixed up bit!");
-          OS << char('A' + MapEntry - 1);
-        } else
-          OS << Bit;
+      if (MapEntry != uint8_t(~0U)) {
+	if (MapEntry == 0) {
+	  OS << format("0x%02x", uint8_t(Code[i]));
+	} else {
+	  if (Code[i]) {
+	    // FIXME: Some of the 8 bits require fix up.
+	    OS << format("0x%02x", uint8_t(Code[i])) << '\''
+	       << char('A' + MapEntry - 1) << '\'';
+	  } else
+	    OS << char('A' + MapEntry - 1);
+	}
+      } else {
+	// Otherwise, write out in binary.
+	OS << "0b";
+	for (unsigned j = 8; j--;) {
+	  unsigned Bit = (Code[i] >> j) & 1;
+
+	  unsigned FixupBit;
+	  if (MAI->isLittleEndian())
+	    FixupBit = i * 8 + j;
+	  else
+	    FixupBit = i * 8 + (7-j);
+
+	  if (uint8_t MapEntry = FixupMap[FixupBit]) {
+	    assert(Bit == 0 && "Encoder wrote into fixed up bit!");
+	    OS << char('A' + MapEntry - 1);
+	  } else
+	    OS << Bit;
+	}
       }
     }
   }
